@@ -1,0 +1,15 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5001:5001"
+    # Optional: mount the current directory for live reloading during development.
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+      - ./chromadb_data:/app/chromadb_data
+    # Load environment variables from your .env file.
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1

@@ -1,0 +1,15 @@
+open-clip-torch
+flask_sqlalchemy
+chromadb
+flask
+flask-login
+flask-jwt-extended
+pillow
+pypdf2
+pdf2image
+qrcode
+flask-migrate
+cryptography
+gunicorn==20.1.0
+numpy
+python-dotenv

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Planos</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Gestión de Planos</a>
+      <div class="collapse navbar-collapse">
+        <ul class="navbar-nav ms-auto">
+          {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('auth.logout') }}">Cerrar Sesión</a>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('auth.login') }}">Iniciar Sesión</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('auth.register') }}">Registrarse</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container my-4">
+    <h1 class="mb-4">Gestión de Planos</h1>
+
+    <!-- Alert for AJAX responses -->
+    <div id="alert-message" class="alert" style="display: none;"></div>
+
+    <!-- Formulario para subir imágenes -->
+    <div class="mb-4">
+      <h2>Subir Archivo</h2>
+      <form id="uploadImageForm" action="{{ url_for('upload_image') }}" method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <input type="file" name="file" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Subir Archivo</button>
+      </form>
+    </div>
+
+    <!-- Formulario para buscar archivos (texto) -->
+    <div class="mb-4">
+      <h2>Buscar Planos (Texto)</h2>
+      <form id="searchTextForm" action="{{ url_for('search_text') }}" method="get">
+        <div class="input-group">
+          <input type="text" name="q" class="form-control" placeholder="Buscar archivo">
+          <button type="submit" class="btn btn-secondary">Buscar</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Contenedor para mostrar resultados de búsqueda (texto) -->
+    <div id="searchResultsText" class="mb-4"></div>
+
+    <!-- Formulario para buscar archivos (imagen) -->
+    <div class="mb-4">
+      <h2>Buscar Planos (Imagen)</h2>
+      <form id="searchImageForm" action="{{ url_for('search_image') }}" method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <input type="file" name="file" class="form-control" accept="image/*" required>
+        </div>
+        <button type="submit" class="btn btn-secondary">Buscar por Imagen</button>
+      </form>
+    </div>
+
+    <!-- Contenedor para mostrar resultados de búsqueda de imagen -->
+    <div id="searchResults" class="mb-4"></div>
+
+    <!-- Lista de archivos subidos -->
+    <div>
+      <h2>Archivos Subidos</h2>
+      <ul class="list-group">
+        {% for file in files %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            {{ file.filename }}
+            <div>
+              <a href="{{ url_for('view_file', file_id=file.id) }}" class="btn btn-sm btn-info">Ver</a>
+              <a href="{{ url_for('download_file', file_id=file.id) }}" class="btn btn-sm btn-success">Descargar</a>
+              <!-- QR code button now triggers a modal -->
+              <button type="button" class="btn btn-sm btn-warning qr-button" data-file-id="{{ file.id }}">
+                Obtener QR
+              </button>
+              <button type="button" class="btn btn-sm btn-danger delete-file" data-file-id="{{ file.id }}">Eliminar</button>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <!-- QR Code Modal -->
+  <div class="modal fade" id="qrModal" tabindex="-1" aria-labelledby="qrModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="qrModalLabel">Código QR</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body text-center">
+          <!-- The QR code image will be inserted here -->
+          <img id="qrImage" src="" alt="QR Code" style="max-width: 100%; height: auto;">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- jQuery (for AJAX) -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- Bootstrap Bundle JS (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Custom JavaScript for AJAX and modal functionality -->
+  <script>
+    $(document).ready(function(){
+      // 1. AJAX submission for image upload
+      $('#uploadImageForm').submit(function(e){
+        e.preventDefault();
+        var formData = new FormData(this);
+        $.ajax({
+          url: $(this).attr('action'),
+          type: 'POST',
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function(response){
+            $('#alert-message')
+              .removeClass()
+              .addClass('alert alert-success')
+              .text(response.message)
+              .fadeIn();
+            // Optionally, refresh the file list after a short delay
+            setTimeout(function(){ location.reload(); }, 1500);
+          },
+          error: function(xhr){
+            var errorMsg = "Error: " + (xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : "Ocurrió un error.");
+            $('#alert-message')
+              .removeClass()
+              .addClass('alert alert-danger')
+              .text(errorMsg)
+              .fadeIn();
+          }
+        });
+      });
+
+      // 2. AJAX submission for text-based search (Displays results as Bootstrap cards)
+      $('#searchTextForm').submit(function(e){
+        e.preventDefault();
+        var query = $(this).find('input[name="q"]').val();
+        $.ajax({
+          url: $(this).attr('action'),
+          type: 'GET',
+          data: { q: query },
+          success: function(response){
+            console.log(response);
+            if (!response || response.length === 0) {
+              $('#alert-message')
+                .removeClass()
+                .addClass('alert alert-info')
+                .text("No se encontraron resultados para: " + query)
+                .fadeIn();
+              $('#searchResultsText').empty();
+              return;
+            }
+            var html = "<h4>Resultados de Búsqueda (Texto):</h4>";
+            html += "<div class='row'>";
+            response.forEach(function(item){
+              var filename = item.metadata.filename || "Sin nombre";
+              var docText  = item.document;
+              var fileType = item.metadata.type || "unknown";
+              html += "<div class='col-md-4 mb-3'>";
+              html +=   "<div class='card'>";
+              if (fileType === "image") {
+                html += "<img src='/view_file/" + item.id + "' class='card-img-top' style='max-height: 200px; object-fit: cover;' alt='Imagen'>";
+              } else {
+                html += "<img src='https://via.placeholder.com/200?text=Documento' class='card-img-top' style='max-height: 200px; object-fit: cover;' alt='Documento'>";
+              }
+              html +=     "<div class='card-body'>";
+              html +=       "<h5 class='card-title'>" + filename + "</h5>";
+              html +=       "<p class='card-text'><strong>Documento:</strong> " + docText + "</p>";
+              html +=       "<p class='card-text'><strong>Tipo:</strong> " + fileType + "</p>";
+              html +=     "</div>";
+              html +=   "</div>";
+              html += "</div>";
+            });
+            html += "</div>";
+            $('#searchResultsText').html(html);
+            $('#alert-message')
+              .removeClass()
+              .addClass('alert alert-info')
+              .text("Búsqueda de texto completada.")
+              .fadeIn();
+          },
+          error: function(xhr){
+            $('#alert-message')
+              .removeClass()
+              .addClass('alert alert-danger')
+              .text("Error en la búsqueda de texto")
+              .fadeIn();
+          }
+        });
+      });
+
+      // 3. AJAX submission for image-based search (Displays matched images in cards)
+      $('#searchImageForm').submit(function(e){
+        e.preventDefault();
+        var formData = new FormData(this);
+        $.ajax({
+          url: $(this).attr('action'),
+          type: 'POST',
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function(response){
+            console.log(response);
+            if (!response || response.length === 0) {
+              $('#alert-message')
+                .removeClass()
+                .addClass('alert alert-info')
+                .text("No se encontraron resultados para la imagen.")
+                .fadeIn();
+              $('#searchResults').empty();
+              return;
+            }
+            var html = "<h4>Resultados de búsqueda (Imagen):</h4>";
+            html += "<div class='row'>";
+            response.forEach(function(item) {
+              var filename = item.metadata.filename || "Archivo sin nombre";
+              var distance = (item.distance || 0).toFixed(4);
+              html += "<div class='col-md-3 mb-3'>";
+              html +=   "<div class='card'>";
+              html +=     "<img src='/view_file/" + item.id + "' class='card-img-top' style='max-height: 200px; object-fit: cover;' alt='Resultado'>";
+              html +=     "<div class='card-body'>";
+              html +=       "<h5 class='card-title'>" + filename + "</h5>";
+              html +=       "<p class='card-text'>Distancia: " + distance + "</p>";
+              html +=     "</div>";
+              html +=   "</div>";
+              html += "</div>";
+            });
+            html += "</div>";
+            $('#searchResults').html(html);
+            $('#alert-message')
+              .removeClass()
+              .addClass('alert alert-info')
+              .text("Búsqueda de imagen completada.")
+              .fadeIn();
+          },
+          error: function(xhr){
+            $('#alert-message')
+              .removeClass()
+              .addClass('alert alert-danger')
+              .text("Error en la búsqueda de imagen")
+              .fadeIn();
+          }
+        });
+      });
+
+      // 4. AJAX submission for file deletion
+      $('.delete-file').click(function(e){
+        e.preventDefault();
+        var fileId = $(this).data('file-id');
+        if(confirm("¿Está seguro que desea eliminar este archivo?")){
+          $.ajax({
+            url: '/delete_file/' + fileId,
+            type: 'POST',
+            success: function(response){
+              $('#alert-message')
+                .removeClass()
+                .addClass('alert alert-success')
+                .text(response.message)
+                .fadeIn();
+              setTimeout(function(){ location.reload(); }, 1500);
+            },
+            error: function(xhr){
+              var errorMsg = "Error: " + (xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : "Ocurrió un error.");
+              $('#alert-message')
+                .removeClass()
+                .addClass('alert alert-danger')
+                .text(errorMsg)
+                .fadeIn();
+            }
+          });
+        }
+      });
+
+      // 5. Show QR code in a modal
+      $('.qr-button').click(function(){
+        var fileId = $(this).data('file-id');
+        // Build the QR code URL
+        var qrUrl = "/generate_qr/" + fileId;
+        // Set the modal image source to the QR URL
+        $("#qrImage").attr("src", qrUrl);
+        // Show the modal using Bootstrap's modal plugin
+        var qrModal = new bootstrap.Modal(document.getElementById('qrModal'), {
+          keyboard: true
+        });
+        qrModal.show();
+      });
+    });
+  </script>
+</body>
+</html>

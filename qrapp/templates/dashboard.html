@@ -1,0 +1,152 @@
+<!-- dashboard.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Gestión de Planos</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Gestión de Planos</a>
+      <div class="collapse navbar-collapse">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <span class="nav-link">Bienvenido, {{ current_user.username }}</span>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('auth.logout') }}">Cerrar Sesión</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1>Dashboard de Administrador</h1>
+    <hr>
+    <!-- Formulario para crear un nuevo usuario -->
+    <div class="mb-4">
+      <h3>Crear Nuevo Usuario</h3>
+      <form id="createUserForm">
+        <div class="mb-3">
+          <label for="newUsername" class="form-label">Usuario</label>
+          <input type="text" id="newUsername" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="newPassword" class="form-label">Contraseña</label>
+          <input type="password" id="newPassword" class="form-control" required>
+        </div>
+        <div class="mb-3 form-check">
+          <input type="checkbox" class="form-check-input" id="newIsAdmin">
+          <label class="form-check-label" for="newIsAdmin">¿Es Administrador?</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Crear Usuario</button>
+      </form>
+      <div id="createUserMessage" class="mt-2"></div>
+    </div>
+
+    <!-- Lista de usuarios -->
+    <div class="mb-4">
+      <h3>Lista de Usuarios</h3>
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Usuario</th>
+            <th>Admin</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="usersTable">
+          {% for user in users %}
+          <tr data-user-id="{{ user.id }}">
+            <td>{{ user.id }}</td>
+            <td>{{ user.username }}</td>
+            <td>{% if user.is_admin %}Sí{% else %}No{% endif %}</td>
+            <td>
+              {% if user.id != current_user.id %}
+              <button class="btn btn-sm btn-danger delete-user" data-user-id="{{ user.id }}">Eliminar</button>
+              {% else %}
+              <span class="text-muted">No se puede eliminar</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- jQuery and Bootstrap Bundle -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Custom JavaScript for AJAX -->
+  <script>
+    $(document).ready(function(){
+      // Handle user creation
+      $("#createUserForm").submit(function(e){
+        e.preventDefault();
+        const username = $("#newUsername").val();
+        const password = $("#newPassword").val();
+        const isAdmin = $("#newIsAdmin").is(":checked");
+
+        $.ajax({
+          url: "{{ url_for('auth.create_user') }}",
+          type: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({ username: username, password: password, is_admin: isAdmin }),
+          success: function(response){
+            $("#createUserMessage").html('<div class="alert alert-success">' + response.message + '</div>');
+            // Append the new user to the table
+            const newUser = response.user;
+            const adminText = newUser.is_admin ? "Sí" : "No";
+            const newRow = `<tr data-user-id="${newUser.id}">
+                              <td>${newUser.id}</td>
+                              <td>${newUser.username}</td>
+                              <td>${adminText}</td>
+                              <td>
+                                <button class="btn btn-sm btn-danger delete-user" data-user-id="${newUser.id}">Eliminar</button>
+                              </td>
+                            </tr>`;
+            $("#usersTable").append(newRow);
+            // Clear form fields
+            $("#newUsername").val('');
+            $("#newPassword").val('');
+            $("#newIsAdmin").prop('checked', false);
+          },
+          error: function(xhr){
+            const err = xhr.responseJSON.error || "Error desconocido";
+            $("#createUserMessage").html('<div class="alert alert-danger">Error: ' + err + '</div>');
+          }
+        });
+      });
+
+      // Handle user deletion (delegated event)
+      $("#usersTable").on("click", ".delete-user", function(){
+        const userId = $(this).data("user-id");
+        if(confirm("¿Está seguro que desea eliminar este usuario?")){
+          $.ajax({
+            url: "/admin/delete_user/" + userId,
+            type: "POST",
+            success: function(response){
+              $("tr[data-user-id='" + userId + "']").remove();
+              alert(response.message);
+            },
+            error: function(xhr){
+              const err = xhr.responseJSON.error || "Error desconocido";
+              alert("Error: " + err);
+            }
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
