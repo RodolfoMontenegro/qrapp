@@ -1,0 +1,4 @@
+touch migrations/versions/.gitkeep
+git add migrations/versions/.gitkeep
+git commit -m "Add .gitkeep to ensure versions folder existence"
+git push
